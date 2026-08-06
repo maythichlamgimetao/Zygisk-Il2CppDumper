@@ -1,27 +1,36 @@
 name: Build
 on:
   workflow_dispatch:
-      inputs:
-        package_name:
-          description: "Package name of the game:"
-          required: true
+    inputs:
+      package_name:
+        description: "Package name of the game:"
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
-    - uses: actions/setup-java@v5
+    - uses: actions/checkout@v4 # Nâng cấp lên v4
+
+    - uses: actions/setup-java@v4 # Nâng cấp lên v4
       with:
         distribution: temurin
         java-version: 11
         cache: gradle
-    - run: |
+
+    - name: Build Zygisk Module
+      run: |
         chmod +x ./gradlew
         sed -i 's/moduleDescription = "/moduleDescription = "(${{ github.event.inputs.package_name }}) /g' module.gradle
         sed -i "s/com.game.packagename/${{ github.event.inputs.package_name }}/g" module/src/main/cpp/game.h
         ./gradlew :module:assembleRelease
-    - uses: actions/upload-artifact@v4
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4 # Nâng cấp lên v4
       with:
-        name: zygisk-il2cppdumper
-        path: out/magisk_module_release/
+        name: zygisk-il2cppdumper-${{ github.run_id }} # Thêm ID để không bị trùng tên file
+        path: |
+          out/*.zip
+          out/magisk_module_release/*
+          module/build/outputs/**/*.zip
+        if-no-files-found: error # Nếu không tìm thấy bất kỳ file .zip nào, GitHub sẽ báo lỗi đỏ ở đây để ta biết đường dẫn chính xác
