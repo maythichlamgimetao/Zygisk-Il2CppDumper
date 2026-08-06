@@ -24,11 +24,13 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # 3. Setup Android NDK (Cực kỳ quan trọng cho Zygisk)
+      # 3. Setup Android NDK (Dùng action chính thức thay cho nDesk)
       - name: Setup Android NDK
-        uses: nDesk/setup-ndk@v1
-        with:
-          ndk-version: r25b
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: |
+          sdkmanager --install "ndk;25.2.9519653"
 
       # 4. Thay package name va Build
       - name: Build Zygisk Module
@@ -39,7 +41,8 @@ jobs:
           sed -i 's/moduleDescription = "/moduleDescription = "(${{ github.event.inputs.package_name }}) /g' module.gradle 2>/dev/null || true
           sed -i "s/com.game.packagename/${{ github.event.inputs.package_name }}/g" module/src/main/cpp/game.h 2>/dev/null || true
           
-          # Chạy build tất cả các task release
+          # Đặt đường dẫn NDK và tiến hành Build
+          export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
           ./gradlew assembleRelease --stacktrace
 
       # 5. Gom file va kiem tra
@@ -47,14 +50,13 @@ jobs:
         run: |
           mkdir -p final_output
           
-          # Tim tat ca file zip va apk trong thu muc build/
+          # Tim tat ca file zip va apk
           find . -type f \( -name "*.zip" -o -name "*.apk" \) -exec cp {} final_output/ \;
           
-          # Kiem tra neu thu muc trong thi bao LOI ngay lập tuc
+          # Kiem tra neu thu muc trong thi bao LOI
           if [ -z "$(ls -A final_output)" ]; then
             echo "--------------------------------------------------"
-            echo "X LỖI CHÍ MẠNG: Gradle build thành công nhưng KHÔNG sinh ra file output nào!"
-            echo "Vui lòng kiểm tra lại log của bước Build Zygisk Module ở trên."
+            echo "X LỖI: Không tìm thấy file zip/apk nào sau khi build!"
             echo "--------------------------------------------------"
             exit 1
           else
@@ -62,7 +64,7 @@ jobs:
             ls -la final_output/
           fi
 
-      # 6. Upload file lên Artifacts
+      # 6. Upload file
       - uses: actions/upload-artifact@v4
         with:
           name: zygisk-il2cppdumper-${{ github.event.inputs.package_name }}
