@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout code va submodules
+      # 1. Checkout repository kèm Submodules
       - uses: actions/checkout@v4
         with:
           submodules: true
@@ -24,47 +24,45 @@ jobs:
           java-version: 17
           cache: gradle
 
-      # 3. Setup Android NDK (Dùng action chính thức thay cho nDesk)
+      # 3. Cài đặt Android NDK chuẩn
       - name: Setup Android NDK
         uses: android-actions/setup-android@v3
 
-      - name: Install NDK
+      - name: Install NDK Component
         run: |
           sdkmanager --install "ndk;25.2.9519653"
 
-      # 4. Thay package name va Build
+      # 4. Sửa Package Name & Build Gradle
       - name: Build Zygisk Module
         run: |
           chmod +x ./gradlew
           
-          # Thay package name
+          # Cấu hình Package Name
           sed -i 's/moduleDescription = "/moduleDescription = "(${{ github.event.inputs.package_name }}) /g' module.gradle 2>/dev/null || true
           sed -i "s/com.game.packagename/${{ github.event.inputs.package_name }}/g" module/src/main/cpp/game.h 2>/dev/null || true
           
-          # Đặt đường dẫn NDK và tiến hành Build
+          # Đặt biến NDK và chạy Build với log chi tiết
           export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/25.2.9519653
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew :module:assembleRelease --info || ./gradlew assembleRelease --info
 
-      # 5. Gom file va kiem tra
-      - name: Collect Output Files
+      # 5. Kiểm tra và Gom file đầu ra
+      - name: Process Output Files
         run: |
           mkdir -p final_output
           
-          # Tim tat ca file zip va apk
+          # Quét tìm tất cả các file zip/apk trong project
           find . -type f \( -name "*.zip" -o -name "*.apk" \) -exec cp {} final_output/ \;
           
-          # Kiem tra neu thu muc trong thi bao LOI
+          # Kiểm tra thư mục đầu ra
           if [ -z "$(ls -A final_output)" ]; then
-            echo "--------------------------------------------------"
-            echo "X LỖI: Không tìm thấy file zip/apk nào sau khi build!"
-            echo "--------------------------------------------------"
+            echo "::error::KHÔNG THỂ TẠO FILE! Hãy kiểm tra chi tiết lỗi C++ ở bước Build phía trên."
             exit 1
           else
-            echo "✔ Đã tìm thấy các file sau:"
+            echo "Thành công! Danh sách file đã tạo:"
             ls -la final_output/
           fi
 
-      # 6. Upload file
+      # 6. Upload lên Artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: zygisk-il2cppdumper-${{ github.event.inputs.package_name }}
