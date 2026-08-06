@@ -11,41 +11,59 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout repository kèm Submodules (Dùng v5 / v4 mới nhất)
-      - uses: actions/checkout@v5
+      # 1. Checkout code va submodules
+      - uses: actions/checkout@v4
         with:
           submodules: true
           fetch-depth: 0
 
-      # 2. Setup Java 17 với NDK support (Dùng v5)
-      - uses: actions/setup-java@v5
+      # 2. Setup Java 17
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: gradle
 
-      # 3. Thay thế Package Name và chạy Build
+      # 3. Setup Android NDK (Cực kỳ quan trọng cho Zygisk)
+      - name: Setup Android NDK
+        uses: nDesk/setup-ndk@v1
+        with:
+          ndk-version: r25b
+
+      # 4. Thay package name va Build
       - name: Build Zygisk Module
         run: |
           chmod +x ./gradlew
           
-          # Thay thế Package Name vào file config
-          sed -i 's/moduleDescription = "/moduleDescription = "(${{ github.event.inputs.package_name }}) /g' module.gradle
-          sed -i "s/com.game.packagename/${{ github.event.inputs.package_name }}/g" module/src/main/cpp/game.h
+          # Thay package name
+          sed -i 's/moduleDescription = "/moduleDescription = "(${{ github.event.inputs.package_name }}) /g' module.gradle 2>/dev/null || true
+          sed -i "s/com.game.packagename/${{ github.event.inputs.package_name }}/g" module/src/main/cpp/game.h 2>/dev/null || true
           
-          # Biên dịch dự án
-          ./gradlew :module:assembleRelease --stacktrace
+          # Chạy build tất cả các task release
+          ./gradlew assembleRelease --stacktrace
 
-      # 4. Gom tất cả file đầu ra vào một thư mục để đảm bảo không bị sót
-      - name: Prepare Artifacts
+      # 5. Gom file va kiem tra
+      - name: Collect Output Files
         run: |
           mkdir -p final_output
+          
+          # Tim tat ca file zip va apk trong thu muc build/
           find . -type f \( -name "*.zip" -o -name "*.apk" \) -exec cp {} final_output/ \;
-          echo "Danh sach file output:"
-          ls -la final_output/
+          
+          # Kiem tra neu thu muc trong thi bao LOI ngay lập tuc
+          if [ -z "$(ls -A final_output)" ]; then
+            echo "--------------------------------------------------"
+            echo "X LỖI CHÍ MẠNG: Gradle build thành công nhưng KHÔNG sinh ra file output nào!"
+            echo "Vui lòng kiểm tra lại log của bước Build Zygisk Module ở trên."
+            echo "--------------------------------------------------"
+            exit 1
+          else
+            echo "✔ Đã tìm thấy các file sau:"
+            ls -la final_output/
+          fi
 
-      # 5. Upload Artifact (Dùng v5 - hỗ trợ native Node 24)
-      - uses: actions/upload-artifact@v5
+      # 6. Upload file lên Artifacts
+      - uses: actions/upload-artifact@v4
         with:
           name: zygisk-il2cppdumper-${{ github.event.inputs.package_name }}
           path: final_output/
