@@ -16,14 +16,14 @@ jobs:
       uses: actions/setup-java@v4
       with:
         distribution: temurin
-        java-version: 11
+        java-version: 17 # Nâng lên Java 17 để chạy mượt mà với Gradle mới
         cache: gradle
 
-    # BƯỚC QUAN TRỌNG: Cài đặt Android NDK để biên dịch code C++ của Zygisk
+    # THAY THẾ CHO BƯỚC LỖI: Tự động cài Android NDK chính chủ từ Google
     - name: Setup Android NDK
-      uses: nwtgck/actions-setup-android-ndk@v1
-      with:
-        ndk-version: r25c
+      run: |
+        echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;25.2.9519653"
+        echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/25.2.9519653" >> $GITHUB_ENV
 
     - name: Build Zygisk Module
       run: |
@@ -31,16 +31,14 @@ jobs:
         sed -i 's/moduleDescription = "/moduleDescription = "(${{ github.event.inputs.package_name }}) /g' module.gradle
         sed -i "s/com.game.packagename/${{ github.event.inputs.package_name }}/g" module/src/main/cpp/game.h
         
-        # Truyền biến môi trường NDK vào lệnh build của Gradle
+        # Ép Gradle nhận diện đúng đường dẫn NDK vừa cài đặt
         ./gradlew :module:assembleRelease -Pandroid.ndkPath=$ANDROID_NDK_ROOT
 
-    # Tìm và gom toàn bộ file kết quả bất kể Gradle xuất ra thư mục nào
+    # Quét toàn bộ máy ảo để gom tất cả các file .zip được sinh ra sau khi build
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: zygisk-il2cppdumper-${{ github.run_id }}
         path: |
-          out/*.zip
-          out/magisk_module_release/*.zip
-          **/build/outputs/**/*.zip
+          **/*.zip
         if-no-files-found: error
